@@ -1,0 +1,35 @@
+{
+  "name": "model-picker",
+  "version": "0.1.0",
+  "description": "Click to switch between the models your gateway (ANTHROPIC_BASE_URL) offers, right in the prompt.",
+  "author": {
+    "name": "fff"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "showBand": {
+      "type": "boolean",
+      "title": "Show the model band",
+      "description": "Draw the current model and a Switch button above the prompt.",
+      "default": true
+    },
+    "baseUrl": {
+      "type": "string",
+      "title": "Gateway base URL",
+      "description": "Where /v1/models is read from. Empty uses ANTHROPIC_BASE_URL.",
+      "default": ""
+    },
+    "paneRows": {
+      "type": "number",
+      "title": "Pane height",
+      "description": "Rows the models pane asks for while seated inline above the prompt.",
+      "default": 20
+    },
+    "refreshMinutes": {
+      "type": "number",
+      "title": "Model list freshness",
+      "description": "Minutes before the model list is fetched again. 0 fetches on every open.",
+      "default": 10
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "name": "model-compare",
+  "version": "0.1.0",
+  "description": "A green dot beside the prompt: click it and two gateway models answer the same prompt, side by side.",
+  "author": { "name": "fff" },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "showDot": {
+      "type": "boolean",
+      "title": "Show the green dot",
+      "description": "Draw the green dot beside the prompt hint; clicking it opens the comparison and runs it.",
+      "default": true
+    },
+    "rightModel": {
+      "type": "string",
+      "title": "Second model",
+      "description": "The model id the right column starts with. Empty remembers the last one used.",
+      "default": ""
+    },
+    "paneRows": {
+      "type": "number",
+      "title": "Pane height",
+      "description": "Rows the compare pane asks for while seated inline above the prompt.",
+      "default": 24
+    },
+    "maxTokens": {
+      "type": "number",
+      "title": "Reply token cap",
+      "description": "The most tokens one reply may take.",
+      "default": 1024
+    },
+    "timeoutSeconds": {
+      "type": "number",
+      "title": "Call timeout",
+      "description": "Seconds one model call may take before it is reported as timed out.",
+      "default": 120
+    }
+  }
+}

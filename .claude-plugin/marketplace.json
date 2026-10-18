@@ -1,0 +1,26 @@
+{
+  "name": "claude-plugins",
+  "owner": {
+    "name": "jiangsi12304"
+  },
+  "plugins": [
+    {
+      "name": "model-compare",
+      "source": "./model-compare",
+      "description": "A green dot beside the prompt: two gateway models answer the same prompt side by side, with blind mode, a model judge, ratings and head-to-head history.",
+      "category": "productivity"
+    },
+    {
+      "name": "model-picker",
+      "source": "./model-picker",
+      "description": "Click to switch between the models your gateway offers, right above the prompt.",
+      "category": "productivity"
+    },
+    {
+      "name": "chat-history",
+      "source": "./chat-history",
+      "description": "A deep-red dot in the prompt footer that opens this project's past conversations; click one to resume it.",
+      "category": "productivity"
+    }
+  ]
+}

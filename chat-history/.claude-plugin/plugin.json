@@ -1,0 +1,35 @@
+{
+  "name": "chat-history",
+  "version": "0.1.0",
+  "description": "A deep-red dot in the prompt footer that opens this project's past conversations, click one to resume it like claude -r.",
+  "author": {
+    "name": "fff"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "showDot": {
+      "type": "boolean",
+      "title": "Show the history dot",
+      "description": "Draw the dot in the prompt footer line.",
+      "default": true
+    },
+    "pageSize": {
+      "type": "number",
+      "title": "Conversations per page",
+      "description": "How many rows the history pane lists at once.",
+      "default": 10
+    },
+    "showAllProjects": {
+      "type": "boolean",
+      "title": "List every project",
+      "description": "List conversations from every project folder, not only this one. Only this project's can be resumed in place.",
+      "default": false
+    },
+    "previewLines": {
+      "type": "number",
+      "title": "Preview lines",
+      "description": "How many messages of the highlighted conversation to show.",
+      "default": 4
+    }
+  }
+}
