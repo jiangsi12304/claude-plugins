@@ -29,6 +29,11 @@ function usageOf(percent: number, tokens: number, window = 1_000_000, usd = 0) {
   return { startedAt: 0, context: { percent, tokens, window }, rateLimits: [], cost: { usd } }
 }
 
+/** A usage answer with no live figures, as a gateway reporting no input leaves it. */
+function bareUsage(window = 1_000_000) {
+  return { startedAt: 0, context: { window }, rateLimits: [], cost: { usd: 0 } }
+}
+
 /**
  * The engine calls the meter makes, answered beneath the plugin: the session's
  * usage, the command registry, the store and compaction. Answers what the
@@ -36,7 +41,7 @@ function usageOf(percent: number, tokens: number, window = 1_000_000, usd = 0) {
  */
 function mockEngine(
   on: On,
-  usage: () => ReturnType<typeof usageOf> = () => usageOf(20, 200_000),
+  usage: () => ReturnType<typeof usageOf> | ReturnType<typeof bareUsage> = () => usageOf(20, 200_000),
 ): {
   stored: Record<string, unknown>
   compactions: number
@@ -46,9 +51,33 @@ function mockEngine(
   const state = { compactions: 0 }
   const clock = mock.clock(on)
   on('session.usage', ($, e, next) => {
-    void e
     void next
-    return { value: usage() }
+    const answered = usage()
+    if (e.breakdown !== undefined) {
+      return {
+        value: {
+          ...answered,
+          context: {
+            ...answered.context,
+            breakdown: {
+              totalTokens: 53_398,
+              percentage: 5,
+              categories: [],
+              maxTokens: 1_000_000,
+              rawMaxTokens: 1_000_000,
+              autocompactSource: 'auto',
+              gridRows: [],
+              model: 'global:model-a',
+              memoryFiles: [],
+              mcpTools: [],
+              agents: [],
+              isAutoCompactEnabled: true,
+            } as never,
+          },
+        },
+      }
+    }
+    return { value: answered }
   })
   on('session.compact', ($, e, next) => {
     void e
@@ -221,4 +250,26 @@ test('the band can be turned off', { options: { showBand: false } }, async ($, o
   const ui = await $.ui.mount({ plugin: 'token-meter', surface: 'terminal', ...BAND })
   expect(await ui.find({ key: 'tokens-open' })).toBeUndefined()
   await ui.unmount()
+})
+
+test('a gateway that reports no input still fills the context from the estimate', async ($, on) => {
+  // The plain call has no tokens or percent, as a proxy that sends
+  // `input_tokens: 0` leaves them; the breakdown estimates them locally.
+  const engine = mockEngine(on, () => bareUsage())
+  const ui = await $.ui.mount({ plugin: 'token-meter', surface: 'terminal', ...BAND })
+  expect(await ui.find({ text: /5%/ })).toBeDefined()
+  expect(await ui.find({ text: /53k\/1\.00M/ })).toBeDefined()
+  await ui.unmount()
+  void engine
+})
+
+test('a turn with no reported input is priced from the estimate, not as free', async ($, on) => {
+  const engine = mockEngine(on)
+  engine.stored.prices = { 'global:model-a': { input: 1, output: 0 } }
+  await finishTurn($, { model: 'global:model-a', input_tokens: 0, output_tokens: 0 })
+
+  const pane = await $.ui.mount({ plugin: 'token-meter', surface: 'terminal', ...PANE })
+  // 53,398 estimated input tokens at $1/M is $0.05, not $0.00.
+  expect(await pane.find({ text: /\$0\.05/ })).toBeDefined()
+  await pane.unmount()
 })

@@ -109,11 +109,38 @@ function priceOf(
   return (fresh + cached + written + out) / 1_000_000
 }
 
+/**
+ * A turn's input tokens. A gateway often reports `input_tokens: 0` and leaves
+ * the cache counts empty, so the turn's own count says nothing; the engine's
+ * locally estimated breakdown does, and costs no request.
+ */
+async function inputOf($: Dollar, usage: TurnUsage): Promise<number> {
+  const reported =
+    Math.max(0, usage.input_tokens) +
+    Math.max(0, usage.cache_read_input_tokens) +
+    Math.max(0, usage.cache_creation_input_tokens)
+  if (reported > 0) return reported
+  try {
+    const estimated = await $.session.usage({ breakdown: 'summary' })
+    return Math.max(0, estimated.context.breakdown?.totalTokens ?? 0)
+  } catch {
+    return 0
+  }
+}
+
 /** Adds one turn to the session's ledger, keeping the model's row in place. */
 async function recordTurn($: Dollar, usage: TurnUsage): Promise<void> {
   const model = plain(usage.model)
   const table = await read($, prices)
-  const cost = priceOf(table, model, usage)
+  const input = await inputOf($, usage)
+  // A turn the gateway reported no input for is priced from the estimate, so
+  // a proxy's zero does not make every turn look free.
+  const cost = priceOf(table, model, {
+    input_tokens: usage.input_tokens > 0 ? usage.input_tokens : input,
+    output_tokens: usage.output_tokens,
+    cache_read_input_tokens: usage.cache_read_input_tokens,
+    cache_creation_input_tokens: usage.cache_creation_input_tokens,
+  })
   await update($, ledger, rows => {
     const next = rows.slice()
     const at = next.findIndex(one => one.model === model)
@@ -141,7 +168,7 @@ async function recordTurn($: Dollar, usage: TurnUsage): Promise<void> {
     const row: DayTotal =
       at < 0 ? { day, cost: 0, input: 0, output: 0, turns: 0 } : { ...next[at]! }
     row.cost += cost
-    row.input += Math.max(0, usage.input_tokens) + Math.max(0, usage.cache_read_input_tokens)
+    row.input += input
     row.output += Math.max(0, usage.output_tokens)
     row.turns += 1
     if (at < 0) next.unshift(row)
@@ -150,19 +177,62 @@ async function recordTurn($: Dollar, usage: TurnUsage): Promise<void> {
   })
 }
 
-/** Reads the engine's live figures into the atoms the band draws. */
-async function readLive($: Dollar): Promise<number> {
+/**
+ * Reads the engine's live figures into the atoms the band draws, and answers
+ * them: a render hook that needs the figures right now reads this return value
+ * rather than the atoms, which `update` writes asynchronously.
+ *
+ * The engine's `context.tokens` and `percent` come from the last API
+ * response's input side, and a gateway that reports `input_tokens: 0` leaves
+ * them absent — which is the usual case behind a proxy. The engine's own
+ * `breakdown: 'summary'` is estimated locally and sends no request, so it
+ * answers the same question when the live figures do not: the breakdown's
+ * `totalTokens` and `percentage` are what the band draws then.
+ */
+type LiveFigures = { percent: number; tokens: number; window: number; cost: number }
+
+/** Reads the live figures without writing any state: safe inside a render hook. */
+async function readFigures($: Dollar): Promise<LiveFigures> {
   try {
     const usage = await $.session.usage()
-    const percent = usage.context.percent ?? 0
-    await update($, livePercent, () => percent)
-    await update($, liveTokens, () => usage.context.tokens ?? 0)
-    await update($, liveWindow, () => usage.context.window)
-    await update($, liveCost, () => usage.cost?.usd ?? 0)
-    return percent
+    let percent = usage.context.percent
+    let tokens = usage.context.tokens
+    const window = usage.context.window
+
+    if (percent === undefined || tokens === undefined) {
+      try {
+        const estimated = await $.session.usage({ breakdown: 'summary' })
+        const breakdown = estimated.context.breakdown
+        if (tokens === undefined) tokens = breakdown?.totalTokens
+        if (percent === undefined) percent = breakdown?.percentage
+      } catch {
+        // No breakdown either: the band shows what the plain call gave.
+      }
+    }
+
+    return {
+      percent: percent ?? 0,
+      tokens: tokens ?? 0,
+      window,
+      cost: usage.cost?.usd ?? 0,
+    }
   } catch {
-    return 0
+    return { percent: 0, tokens: 0, window: 0, cost: 0 }
   }
+}
+
+/**
+ * Reads the live figures and keeps them in the atoms, for the event hooks that
+ * may write state. A render hook calls `readFigures` instead: a state write
+ * there is refused by the host.
+ */
+async function readLive($: Dollar): Promise<LiveFigures> {
+  const figures = await readFigures($)
+  await update($, livePercent, () => figures.percent)
+  await update($, liveTokens, () => figures.tokens)
+  await update($, liveWindow, () => figures.window)
+  await update($, liveCost, () => figures.cost)
+  return figures
 }
 
 /** Starts the tick that keeps the band's context figure live while a turn runs. */
@@ -171,7 +241,8 @@ async function startTicker($: Dollar, options: Options): Promise<void> {
   await readLive($)
   ticker = $.clock.every(TICK_MS, () => {
     void (async () => {
-      const percent = await readLive($)
+      const figures = await readLive($)
+      const percent = figures.percent
       if (!(await read($, isWorking))) {
         stopTicker()
         return
@@ -317,8 +388,8 @@ export const register: Register = (on, raw) => {
     }
     await update($, isWorking, () => false)
     stopTicker()
-    const percent = await readLive($)
-    await update($, lastPercent, () => percent)
+    const figures = await readLive($)
+    await update($, lastPercent, () => figures.percent)
     return next(e)
   })
 
@@ -334,24 +405,16 @@ export const register: Register = (on, raw) => {
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
     if (!options.showBand) return next(e)
 
-    // A band drawn before `session.start` (or where the host fires none) reads
-    // the session itself: reading is all a render hook may do, and the atoms
-    // are only a cache of the same figures.
-    let percent = await read($, livePercent)
-    let tokens = await read($, liveTokens)
-    let window = await read($, liveWindow)
-    let cost = await read($, liveCost)
-    if (percent === 0 && tokens === 0) {
-      try {
-        const usage = await $.session.usage()
-        percent = usage.context.percent ?? 0
-        tokens = usage.context.tokens ?? 0
-        window = usage.context.window
-        cost = usage.cost?.usd ?? 0
-      } catch {
-        // No figures beneath: the band shows what it has.
-      }
-    }
+    // The band reads the session itself on every draw: reading is all a render
+    // hook may do, and the atoms are a cache that a host firing no
+    // `session.start` — or a gateway reporting no input — would leave empty.
+    // `readLive` falls back to the engine's local estimate when the live
+    // figures are absent, and answers the figures it read.
+    const figures = await readFigures($)
+    const percent = figures.percent
+    const tokens = figures.tokens
+    const window = figures.window
+    const cost = figures.cost
     const spentToday = (await read($, days))[0]?.cost ?? 0
     const working = await read($, isWorking)
     const { Box, Button, Text } = $.ui.resolve(e)
