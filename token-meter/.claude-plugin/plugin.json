@@ -1,0 +1,39 @@
+{
+  "name": "token-meter",
+  "version": "0.1.0",
+  "description": "Context, tokens and money for the models your gateway serves: a live band, a per-model ledger, prices you set, and a budget guard that compacts before the window fills.",
+  "author": { "name": "jiangsi12304" },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "showBand": {
+      "type": "boolean",
+      "title": "Show the meter band",
+      "description": "Draw context usage, session spend and the last turn's tokens above the prompt.",
+      "default": true
+    },
+    "compactAt": {
+      "type": "number",
+      "title": "Compact at (percent)",
+      "description": "When the context window reaches this percentage, compact once. 0 turns the guard off.",
+      "default": 85
+    },
+    "warnAt": {
+      "type": "number",
+      "title": "Warn at (percent)",
+      "description": "Show the context figure in warning colour from this percentage on.",
+      "default": 70
+    },
+    "dailyBudget": {
+      "type": "number",
+      "title": "Daily budget (USD)",
+      "description": "Warn once a day when the estimated spend passes this. 0 turns the budget off.",
+      "default": 0
+    },
+    "paneRows": {
+      "type": "number",
+      "title": "Pane height",
+      "description": "Rows the meter pane asks for while seated inline.",
+      "default": 22
+    }
+  }
+}

@@ -7,6 +7,7 @@
 | [model-compare](./model-compare/) | 提示框旁一颗绿点：两个网关模型并排回答同一个提示词，带盲测、模型裁判、评分与历史交锋 |
 | [model-picker](./model-picker/) | 提示框上方一条模型栏：点一下就在网关的模型列表里切换 |
 | [chat-history](./chat-history/) | 提示框旁一颗深红点：列出本项目的过去会话，点一条像 `claude -r` 一样恢复 |
+| [token-meter](./token-meter/) | 上下文用量、token 与估算花费按模型分账，带预算守卫和自动压缩 |
 
 ## 安装（推荐：marketplace 一次装三个）
 
@@ -15,6 +16,7 @@
 /plugin install model-compare@claude-plugins
 /plugin install model-picker@claude-plugins
 /plugin install chat-history@claude-plugins
+/plugin install token-meter@claude-plugins
 ```
 
 ## 安装（开发：从文件夹加载）

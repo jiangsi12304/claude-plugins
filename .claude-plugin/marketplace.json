@@ -21,6 +21,12 @@
       "source": "./chat-history",
       "description": "A deep-red dot in the prompt footer that opens this project's past conversations; click one to resume it.",
       "category": "productivity"
+    },
+    {
+      "name": "token-meter",
+      "source": "./token-meter",
+      "description": "Context, tokens and money by model: a live band above the prompt, a per-model ledger with prices you set, and a budget guard that compacts before the window fills.",
+      "category": "productivity"
     }
   ]
 }
