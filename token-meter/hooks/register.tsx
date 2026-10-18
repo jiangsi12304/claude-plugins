@@ -327,10 +327,12 @@ export const register: Register = (on, raw) => {
     return { text: 'Token meter opened.' }
   }).catch(($, e, next) => (next.called ? next(e) : { text: 'The token meter could not open.' }))
 
-  // The band above the prompt: context, this session's estimated spend, and
-  // what the last turn cost. A click opens the pane.
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (!options.showBand || e.props.hasSurvey) return next(e)
+  // The meter sits on the hint line under the prompt, right-aligned: the
+  // engine's own line (or another plugin's) is drawn first, and the figures
+  // ride at the end of it. Only the first hook in the chain draws a component,
+  // so what `next` answers is nested rather than replaced.
+  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+    if (!options.showBand) return next(e)
 
     // A band drawn before `session.start` (or where the host fires none) reads
     // the session itself: reading is all a render hook may do, and the atoms
@@ -354,25 +356,36 @@ export const register: Register = (on, raw) => {
     const working = await read($, isWorking)
     const { Box, Button, Text } = $.ui.resolve(e)
 
+    let below: JSX.Element | undefined
+    try {
+      below = await next(e)
+    } catch {
+      // Nothing beneath answers: the hint still draws.
+      below = undefined
+    }
+
     const warned = percent >= Math.max(0, options.warnAt)
     const bar = Math.min(10, Math.max(1, Math.round(percent / 10)))
     const gauge = '█'.repeat(bar) + '░'.repeat(10 - bar)
 
     return (
-      <Box>
-        <Text dimColor>ctx </Text>
-        <Text color={warned ? 'warning' : 'success'} tabular>
-          {gauge}
-        </Text>
-        <Text dimColor tabular>{` ${Math.round(percent)}%`}</Text>
-        {window > 0 && <Text dimColor>{` ${shortTokens(tokens)}/${shortTokens(window)}`}</Text>}
-        <Text dimColor>{'   ·   '}</Text>
-        <Button key="tokens-open" plain onPress={() => void openPane($, options)}>
-          <Text dimColor>session </Text>
-          <Text tabular>{shortCost(cost)}</Text>
-          {spentToday > 0 && <Text dimColor tabular>{` · today ${shortCost(spentToday)}`}</Text>}
-        </Button>
-        {working && <Text dimColor>{'  ·  working…'}</Text>}
+      <Box flexDirection="column">
+        <Box>{below ?? <Text dimColor>{e.props.hint}</Text>}</Box>
+        <Box justifyContent="flex-end">
+          <Text dimColor>ctx </Text>
+          <Text color={warned ? 'warning' : 'success'} tabular>
+            {gauge}
+          </Text>
+          <Text dimColor tabular>{` ${Math.round(percent)}%`}</Text>
+          {window > 0 && <Text dimColor>{` ${shortTokens(tokens)}/${shortTokens(window)}`}</Text>}
+          <Text dimColor>{'  ·  '}</Text>
+          <Button key="tokens-open" plain onPress={() => void openPane($, options)}>
+            <Text dimColor>session </Text>
+            <Text tabular>{shortCost(cost)}</Text>
+            {spentToday > 0 && <Text dimColor tabular>{` · today ${shortCost(spentToday)}`}</Text>}
+          </Button>
+          {working && <Text dimColor>{'  ·  working…'}</Text>}
+        </Box>
       </Box>
     )
   })

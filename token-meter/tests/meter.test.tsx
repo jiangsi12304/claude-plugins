@@ -3,14 +3,11 @@ import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 const BAND = {
-  component: 'AbovePrompt' as const,
+  component: 'PromptHint' as const,
   props: {
-    hasSurvey: false,
+    isDraft: false,
     isWorking: false,
-    maxRows: 10,
-    bodyColumns: 120,
-    scroll: { offset: 0, bodyRows: 9 },
-    view: {},
+    hint: '? for shortcuts',
   },
 }
 
@@ -216,7 +213,7 @@ test('with the guard off, no compaction happens', { options: { compactAt: 0 } },
 
 test('the band can be turned off', { options: { showBand: false } }, async ($, on) => {
   mockEngine(on)
-  on('ui.render', { component: 'AbovePrompt' }, ($, e, next) => {
+  on('ui.render', { component: 'PromptHint' }, ($, e, next) => {
     void next
     const { Box, Text } = $.ui.resolve(e)
     return <Box><Text>plain</Text></Box>
