@@ -50,8 +50,17 @@ const ROWS: Record<string, string> = {
 /** Answers the transcript reads, the pane, and the engine calls the plugin makes. */
 const norm = (path: string): string => path.replaceAll(String.fromCharCode(92), '/')
 
-function mockEngine(on: On, resumed: string[]): void {
+function mockEngine(on: On, resumed: string[], stored: Record<string, unknown> = {}): void {
   mock.env(on, { USERPROFILE: 'C:/home' })
+  on('store.get', ($, e, next) => {
+    void next
+    return { value: stored[e.key as string] }
+  })
+  on('store.set', ($, e, next) => {
+    void next
+    stored[e.key as string] = e.value
+    return { value: undefined }
+  })
   on('fs.list', ($, e, next) => {
     if (norm(e.path) === 'C:/home/.claude/projects') {
       return {
@@ -223,5 +232,52 @@ test('a transcript holding escape sequences still draws the pane', async ($, on)
   await ui.press({ key: 'p:dddd4444-4444-4444-4444-444444444444' })
   expect(await ui.find({ text: /Colourred and plain\./ })).toBeDefined()
   expect(await ui.find({ text: /\u001b/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a pinned conversation leads the list and stays pinned across sessions', async ($, on) => {
+  const stored: Record<string, unknown> = {}
+  mockEngine(on, [], stored)
+  const ui = await $.ui.mount({ plugin: 'chat-history', surface: 'terminal', ...PANE })
+  await ui.press({ key: 'history-refresh' })
+  // Newest first to begin with.
+  expect(await ui.find({ key: 'pin:bbbb2222-2222-2222-2222-222222222222' })).toBeDefined()
+
+  // Pin the oldest one.
+  await ui.press({ key: 'pin:bbbb2222-2222-2222-2222-222222222222' })
+  expect(stored.pins).toEqual(['bbbb2222-2222-2222-2222-222222222222'])
+
+  const pinned = await ui.find({ key: 'c:bbbb2222-2222-2222-2222-222222222222' })
+  expect(pinned).toBeDefined()
+  // The pinned row is drawn above the unpinned ones.
+  const rows = await ui.findAll({ type: 'Button' })
+  const keys = rows.map(one => one.props.key)
+  const pinnedAt = keys.indexOf('c:bbbb2222-2222-2222-2222-222222222222')
+  const otherAt = keys.indexOf('c:aaaa1111-1111-1111-1111-111111111111')
+  expect(pinnedAt).toBeGreaterThan(-1)
+  expect(pinnedAt).toBeLessThan(otherAt)
+  await ui.unmount()
+})
+
+test('a pin kept from a past session shows on the next one', async ($, on) => {
+  mockEngine(on, [], { pins: ['bbbb2222-2222-2222-2222-222222222222'] })
+  const ui = await $.ui.mount({ plugin: 'chat-history', surface: 'terminal', ...PANE })
+  await ui.press({ key: 'history-refresh' })
+  // The button reads Unpin: the row is pinned already.
+  const unpin = await ui.find({ key: 'pin:bbbb2222-2222-2222-2222-222222222222' })
+  expect(unpin?.props.label).toBe('Unpin')
+  expect(await ui.find({ text: /📌/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('unpinning puts a conversation back with the rest', async ($, on) => {
+  const stored: Record<string, unknown> = { pins: ['bbbb2222-2222-2222-2222-222222222222'] }
+  mockEngine(on, [], stored)
+  const ui = await $.ui.mount({ plugin: 'chat-history', surface: 'terminal', ...PANE })
+  await ui.press({ key: 'history-refresh' })
+  await ui.press({ key: 'pin:bbbb2222-2222-2222-2222-222222222222' })
+  expect(stored.pins).toEqual([])
+  const again = await ui.find({ key: 'pin:bbbb2222-2222-2222-2222-222222222222' })
+  expect(again?.props.label).toBe('Pin')
   await ui.unmount()
 })

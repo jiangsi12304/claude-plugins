@@ -9,6 +9,7 @@
 - **标题**：优先用 Claude Code 自己写的会话标题（`aiTitle`），没有则用该会话的第一条用户消息。
 - **点击恢复**：点一行就调用引擎自己的 `/resume <id>`，与在会话里敲 `/resume`、或退出后跑 `claude -r <id>` 等价——当前窗口直接切到那段对话，上下文一起载入。
 - **Peek 预览**：每行右侧的 `Peek` 读出该会话开头几条消息（`you:` / `claude:`），先看内容再决定恢复哪一段。
+- **置顶**：每行右侧的 `Pin` 把该会话钉到列表最前（行首显示 📌），再点一次 `Unpin` 放回原位。置顶按你钉的顺序排列，**存进插件存储、跨会话保留**——即使该会话已经不在「最近 60 个」里，只要还置顶就仍在列表顶部。
 - **过滤 / 翻页 / 刷新**：面板顶部输入框实时过滤，底部 `‹ Prev` / `Next ›` 翻页，`Refresh` 重读磁盘。
 - **跨项目（可选）**：`showAllProjects` 打开后列出所有项目的会话；注意只有本项目的能在当前窗口里直接恢复。
 
@@ -29,7 +30,7 @@ claude --plugin-dir path/to/chat-history
 ## 用法
 
 - 点提示框下方的深红圆点，或敲 `/history`。
-- 点一行恢复该对话；点 `Peek` 先看开头几条消息；`Esc` 关闭面板。
+- 点一行恢复该对话；点 `Pin` 置顶 / `Unpin` 取消；点 `Peek` 先看开头几条消息；`Esc` 关闭面板。
 
 ## 配置（`/config` 里的四行）
 
@@ -63,4 +64,4 @@ claude plugin test .       # 跑 tests/ 下的 *.test.tsx（terminal / desktop /
 
 - `hooks/register.tsx`：全部逻辑（找文件、读标题、渲染圆点与面板、恢复）。
 - `types/index.d.ts`：`$.state` 的值契约。
-- `tests/history.test.tsx`：圆点、列表与恢复、Peek、过滤、移动端五组用例。
+- `tests/history.test.tsx`：圆点、列表与恢复、Peek、过滤、移动端，以及置顶（置顶后排在前面、跨会话保留、取消置顶）等用例。

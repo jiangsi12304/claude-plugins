@@ -14,6 +14,8 @@ const loadedAt = atom({ plugin: 'chat-history', key: 'loadedAt' } as const, 0)
 const filter = atom({ plugin: 'chat-history', key: 'filter' } as const, '')
 const preview = atom({ plugin: 'chat-history', key: 'preview' } as const, '')
 const previewId = atom({ plugin: 'chat-history', key: 'previewId' } as const, '')
+/** The ids the person pinned, newest pin first; kept across sessions. */
+const pins = atom({ plugin: 'chat-history', key: 'pins' } as const, [] as string[])
 
 type Dollar = EngineInterface
 
@@ -311,6 +313,61 @@ async function openHistory($: Dollar, options: Options): Promise<void> {
   await loadPreview($, options, (await read($, conversations))[0])
 }
 
+/**
+ * Pins or unpins a conversation. The pins are kept in `$.store`, so a
+ * conversation stays at the top of the list across sessions even after its
+ * transcript has aged out of the newest sixty.
+ */
+async function togglePin($: Dollar, id: string): Promise<void> {
+  // Read the same way the pane does: a host firing no `session.start` leaves
+  // the atom empty while the store holds the pins.
+  const current = await pinsForRender($)
+  const next = current.includes(id) ? current.filter(one => one !== id) : [id, ...current]
+  await update($, pins, () => next)
+  await $.store.set('pins', next)
+  await update($, status, () => (next.includes(id) ? 'Pinned.' : 'Unpinned.'))
+}
+
+/** The stored pins, read once when the session starts. */
+async function loadPins($: Dollar): Promise<void> {
+  const stored = await $.store.get('pins')
+  if (!Array.isArray(stored)) return
+  const ids = stored.filter((one): one is string => typeof one === 'string')
+  await update($, pins, () => ids)
+}
+
+/**
+ * The pins as the pane draws them: the atom when `session.start` filled it,
+ * else read from the store directly. A render hook may read; it may not write
+ * state, which is why this does not go through `loadPins`.
+ */
+async function pinsForRender($: Dollar): Promise<string[]> {
+  const known = await read($, pins)
+  if (known.length > 0) return known
+  const stored = await $.store.get('pins').catch(() => undefined)
+  if (!Array.isArray(stored)) return known
+  return stored.filter((one): one is string => typeof one === 'string')
+}
+
+/**
+ * The list as the pane draws it: pinned conversations first, each group
+ * newest first. A pin whose transcript is no longer in the list is dropped
+ * from the drawing rather than shown as a row that cannot resume.
+ */
+function ordered(list: readonly Conversation[], pinned: readonly string[]): Conversation[] {
+  const byId = new Map(list.map(one => [one.id, one] as const))
+  const top: Conversation[] = []
+  for (const id of pinned) {
+    const one = byId.get(id)
+    if (one !== undefined) {
+      top.push({ ...one, pinned: true })
+      byId.delete(id)
+    }
+  }
+  const rest = [...byId.values()].sort((a, b) => b.updatedAt - a.updatedAt)
+  return [...top, ...rest]
+}
+
 /** A relative time, as the list shows it. */
 function ago(ms: number): string {
   const minutes = Math.round((Date.now() - ms) / 60_000)
@@ -339,6 +396,7 @@ export const register: Register = (on, raw) => {
     await update($, filter, () => '')
     await update($, preview, () => '')
     await update($, previewId, () => '')
+    await loadPins($)
     if (e.isInteractive) void loadConversations($, options)
     return next(e)
   })
@@ -385,12 +443,16 @@ export const register: Register = (on, raw) => {
     const needle = (await read($, filter)).trim().toLowerCase()
     const pageState = await read($, page)
     const previewText = await read($, preview)
+    const pinned = await pinsForRender($)
     const { Box, Button, Text } = $.ui.resolve(e)
 
+    // Pinned conversations lead, then the rest newest first: a pin is where
+    // the person says a conversation should be, not how recently it changed.
+    const ranked = ordered(list, pinned)
     const matched =
       needle === ''
-        ? list
-        : list.filter(
+        ? ranked
+        : ranked.filter(
             one =>
               one.id.toLowerCase().includes(needle) ||
               (one.title ?? '').toLowerCase().includes(needle) ||
@@ -447,10 +509,17 @@ export const register: Register = (on, raw) => {
               hotkey={index < 9 ? String(index + 1) : undefined}
               onPress={() => void resumeConversation($, one)}
             >
+              <Text dimColor>{one.pinned === true ? '📌 ' : ''}</Text>
               <Text dimColor>{`${ago(one.updatedAt)}  `}</Text>
               <Text>{one.title ?? (one.firstPrompt !== '' ? one.firstPrompt : one.id)}</Text>
               {options.showAllProjects && <Text dimColor>{`  ${one.project}`}</Text>}
             </Button>
+            <Button
+              key={`pin:${one.id}`}
+              label={one.pinned === true ? 'Unpin' : 'Pin'}
+              dimColor={one.pinned !== true}
+              onPress={() => void togglePin($, one.id)}
+            />
             <Button
               key={`p:${one.id}`}
               label="Peek"

@@ -12,6 +12,8 @@ export type Conversation = {
   project: string
   /** The working directory recorded in it, when one was. */
   cwd?: string
+  /** True when the person pinned it: a pinned conversation leads the list. */
+  pinned?: boolean
 }
 
 declare module 'claude-code' {
@@ -25,6 +27,8 @@ declare module 'claude-code' {
       filter: string
       preview: string
       previewId: string
+      /** The ids the person pinned, newest pin first; kept across sessions. */
+      pins: string[]
     }
   }
 }
