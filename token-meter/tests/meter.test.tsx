@@ -62,7 +62,13 @@ function mockEngine(
             breakdown: {
               totalTokens: 53_398,
               percentage: 5,
-              categories: [],
+              categories: [
+                { name: 'System prompt', tokens: 2_031, color: 'promptBorder', isDeferred: false, kind: 'used' },
+                { name: 'System tools', tokens: 35_599, color: 'inactive', isDeferred: false, kind: 'used' },
+                { name: 'Skills', tokens: 6_339, color: 'warning', isDeferred: false, kind: 'used' },
+                { name: 'Messages', tokens: 9_429, color: 'purple', isDeferred: false, kind: 'used' },
+                { name: 'Free space', tokens: 946_602, color: 'promptBorder', isDeferred: false, kind: 'free' },
+              ],
               maxTokens: 1_000_000,
               rawMaxTokens: 1_000_000,
               autocompactSource: 'auto',
@@ -271,5 +277,16 @@ test('a turn with no reported input is priced from the estimate, not as free', a
   const pane = await $.ui.mount({ plugin: 'token-meter', surface: 'terminal', ...PANE })
   // 53,398 estimated input tokens at $1/M is $0.05, not $0.00.
   expect(await pane.find({ text: /\$0\.05/ })).toBeDefined()
+  await pane.unmount()
+})
+
+test('the pane shows what the context holds', async ($, on) => {
+  mockEngine(on)
+  const pane = await $.ui.mount({ plugin: 'token-meter', surface: 'terminal', ...PANE })
+  expect(await pane.find({ text: /what the context holds/ })).toBeDefined()
+  expect(await pane.find({ text: /System tools/ })).toBeDefined()
+  expect(await pane.find({ text: /36k/ })).toBeDefined()
+  // The free space is not listed among what the context holds.
+  expect(await pane.find({ text: /Free space/ })).toBeUndefined()
   await pane.unmount()
 })

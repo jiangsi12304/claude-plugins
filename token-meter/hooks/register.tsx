@@ -65,6 +65,12 @@ function pad(text: string, width: number): string {
   return cut + ' '.repeat(Math.max(0, width - cut.length))
 }
 
+/** `tokens` as a share of `window`, as the context rows read it. */
+function percentOf(tokens: number, window: number): string {
+  if (window <= 0) return ''
+  return `${((tokens / window) * 100).toFixed(1)}%`
+}
+
 /** A token count as the band spells it: `812`, `12.4k`, `1.02M`. */
 function shortTokens(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '0'
@@ -190,6 +196,27 @@ async function recordTurn($: Dollar, usage: TurnUsage): Promise<void> {
  * `totalTokens` and `percentage` are what the band draws then.
  */
 type LiveFigures = { percent: number; tokens: number; window: number; cost: number }
+
+/** One row of what the context holds, as the pane lists it. */
+type ContextRow = { name: string; tokens: number; kind: 'used' | 'free' | 'buffer' | 'deferred' }
+
+/**
+ * What the context is made of, from the engine's local estimate. The pane
+ * shows it so a fresh session's first percent reads as what it is: the system
+ * prompt, the tool schemas and the skill listing, not the person's own words.
+ */
+async function contextRows($: Dollar): Promise<ContextRow[]> {
+  try {
+    const estimated = await $.session.usage({ breakdown: 'summary' })
+    const categories = estimated.context.breakdown?.categories ?? []
+    return categories
+      .filter(one => one.tokens > 0)
+      .map(one => ({ name: one.name, tokens: one.tokens, kind: one.kind }))
+      .sort((a, b) => b.tokens - a.tokens)
+  } catch {
+    return []
+  }
+}
 
 /** Reads the live figures without writing any state: safe inside a render hook. */
 async function readFigures($: Dollar): Promise<LiveFigures> {
@@ -460,10 +487,13 @@ export const register: Register = (on, raw) => {
     const history = await read($, days)
     const note = await read($, status)
     const typed = await read($, editing)
-    const percent = await read($, livePercent)
-    const tokens = await read($, liveTokens)
-    const window = await read($, liveWindow)
-    const cost = await read($, liveCost)
+    // The pane reads the session itself, as the band does: the atoms are a
+    // cache a host firing no `session.start` leaves empty.
+    const figures = await readFigures($)
+    const percent = figures.percent
+    const tokens = figures.tokens
+    const window = figures.window
+    const cost = figures.cost
     const canType = e.surface !== 'mobile'
     const { Box, Button, Text } = $.ui.resolve(e)
 
@@ -474,12 +504,27 @@ export const register: Register = (on, raw) => {
     const input = rows.reduce((sum, one) => sum + one.input + one.cacheRead, 0)
     const output = rows.reduce((sum, one) => sum + one.output, 0)
     const unpriced = rows.filter(one => table[one.model] === undefined)
+    // What the context holds, so a fresh session's percent reads as what it
+    // is: the system prompt, the tool schemas and the skill listing are in the
+    // window before the person has typed anything.
+    const parts = await contextRows($)
+    const used = parts.filter(one => one.kind === 'used' || one.kind === 'deferred')
 
     return (
       <Box flexDirection="column">
         <Text dimColor wrap="wrap">
           {`context ${Math.round(percent)}% · ${shortTokens(tokens)}/${shortTokens(window)} tokens · session ${shortCost(cost)} · ${turns} turns`}
         </Text>
+        {used.length > 0 && (
+          <Box flexDirection="column">
+            <Text dimColor>{'what the context holds'}</Text>
+            {used.map(one => (
+              <Text key={`ctx:${one.name}`} dimColor tabular>
+                {`  ${pad(one.name, 16)}${pad(shortTokens(one.tokens), 8)}${percentOf(one.tokens, window)}`}
+              </Text>
+            ))}
+          </Box>
+        )}
         <Text dimColor>{' '}</Text>
         <Text dimColor>
           {pad('model', modelWidth)}
