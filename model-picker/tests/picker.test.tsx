@@ -118,6 +118,29 @@ test('the band leaves the effort out for a model that declares none', async ($, 
   await ui.unmount()
 })
 
+test('the band shows the effort beside the model, cycling on a press', async ($, on) => {
+  const { efforts } = mockEngine(on)
+  const ui = await $.ui.mount({ plugin: 'model-picker', surface: 'terminal', ...BAND })
+  // The model's levels arrive with the gateway read at session start, which
+  // the band may be drawn before; opening the pane fills them.
+  expect(await ui.find({ key: 'effort-cycle' })).toBeUndefined()
+  const pane = await $.ui.mount({ plugin: 'model-picker', surface: 'terminal', ...PANE })
+  await pane.press({ key: 'refresh' })
+  await pane.unmount()
+
+  await ui.press({ key: 'effort-cycle' })
+  expect(efforts).toContain('low')
+  await ui.unmount()
+})
+
+test('the band keeps the gateway prefix but drops the context suffix', async ($, on) => {
+  mockEngine(on, 'cn:model-a[1M]')
+  const ui = await $.ui.mount({ plugin: 'model-picker', surface: 'terminal', ...BAND })
+  expect(await ui.find({ text: /model-a/ })).toBeDefined()
+  expect(await ui.find({ text: /\[1M\]/i })).toBeUndefined()
+  await ui.unmount()
+})
+
 test('the pane lists what the gateway offers and a press switches', async ($, on) => {
   const { switched } = mockEngine(on)
   for (const surface of ['terminal', 'desktop'] as const) {

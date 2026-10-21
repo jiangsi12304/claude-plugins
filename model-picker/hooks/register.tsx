@@ -313,7 +313,6 @@ export const register: Register = (on, raw) => {
     if (!options.showBand || e.props.hasSurvey) return next(e)
 
     const now = await read($, current)
-    const busy = await read($, isBusy)
     const level = await read($, effort)
     const levels = await read($, effortOptions)
     const { Box, Button, Text } = $.ui.resolve(e)
@@ -323,26 +322,27 @@ export const register: Register = (on, raw) => {
     const shown = now !== '' ? now : plain(await $.session.model())
 
     // A model the gateway declares no levels for offers no effort to show, so
-    // the row ends at the model rather than trailing a dash.
+    // the row ends at the model rather than trailing a separator.
     const hasLevels = levels.length > 0
+
+    // The gateway prefix (`global:`, `cn:`) says which route the session takes,
+    // so it stays — but dimmed, with the model's own name carrying the weight.
+    // Labels are dropped: `model` and `effort` said what the shapes already say.
+    const prefix = /^[a-z][a-z0-9-]*:(?=.)/i.exec(shown)?.[0] ?? ''
+    const name = shown.slice(prefix.length)
+    // The row is one line: the name takes what the prefix, the separator and
+    // the effort leave of `bodyColumns`, and is cut rather than wrapped.
+    const room = Math.max(8, (e.props.bodyColumns ?? 80) - prefix.length - (hasLevels ? level.length + 5 : 0))
 
     return (
       <Box>
-        <Text dimColor>model</Text>
-        <Text dimColor>{'  '}</Text>
-        <Button
-          key="model-name"
-          plain
-          onPress={() => void openPicker($, options)}
-        >
-          <Text weight="semibold">{shown !== '' ? shown : 'default'}</Text>
+        <Button key="model-name" plain onPress={() => void openPicker($, options)}>
+          {prefix !== '' && <Text dimColor>{prefix}</Text>}
+          <Text weight="semibold">{fit(name !== '' ? name : 'default', room)}</Text>
         </Button>
-        <Text dimColor>{busy ? '  ·  reading…' : ''}</Text>
         {hasLevels && (
           <>
-            <Text dimColor>{'   ·   '}</Text>
-            <Text dimColor>effort</Text>
-            <Text dimColor>{'  '}</Text>
+            <Text dimColor>{'  ·  '}</Text>
             <Button
               key="effort-cycle"
               plain
@@ -352,7 +352,7 @@ export const register: Register = (on, raw) => {
                 if (upcoming !== undefined) void setEffort($, upcoming)
               }}
             >
-              <Text>{level}</Text>
+              <Text dimColor>{level}</Text>
             </Button>
           </>
         )}
