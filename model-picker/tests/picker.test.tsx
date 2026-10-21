@@ -141,6 +141,16 @@ test('the band keeps the gateway prefix but drops the context suffix', async ($,
   await ui.unmount()
 })
 
+test('the band sits flush right, on the meter line\'s edge', async ($, on) => {
+  mockEngine(on)
+  const ui = await $.ui.mount({ plugin: 'model-picker', surface: 'terminal', ...BAND })
+  const boxes = await ui.findAll({ type: 'Box' })
+  expect(boxes.some(one => one.props.justifyContent === 'flex-end')).toBe(true)
+  // The outer column is what gives that row the site's width to push against.
+  expect(boxes.some(one => one.props.flexDirection === 'column')).toBe(true)
+  await ui.unmount()
+})
+
 test('the pane lists what the gateway offers and a press switches', async ($, on) => {
   const { switched } = mockEngine(on)
   for (const surface of ['terminal', 'desktop'] as const) {

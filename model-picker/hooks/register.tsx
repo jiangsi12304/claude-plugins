@@ -332,30 +332,37 @@ export const register: Register = (on, raw) => {
     const name = shown.slice(prefix.length)
     // The row is one line: the name takes what the prefix, the separator and
     // the effort leave of `bodyColumns`, and is cut rather than wrapped.
-    const room = Math.max(8, (e.props.bodyColumns ?? 80) - prefix.length - (hasLevels ? level.length + 5 : 0))
+    const columns = e.props.bodyColumns ?? 80
+    const room = Math.max(8, columns - prefix.length - (hasLevels ? level.length + 5 : 0))
 
+    // Flush right, on the same edge as the meter's line under the prompt, and
+    // laid out the same way: a column Box stretches its child to the site's
+    // width, so the row inside it has the width `flex-end` needs to push
+    // against. `bodyColumns` already excludes the engine's `[-]` at the right.
     return (
-      <Box>
-        <Button key="model-name" plain onPress={() => void openPicker($, options)}>
-          {prefix !== '' && <Text dimColor>{prefix}</Text>}
-          <Text weight="semibold">{fit(name !== '' ? name : 'default', room)}</Text>
-        </Button>
-        {hasLevels && (
-          <>
-            <Text dimColor>{'  ·  '}</Text>
-            <Button
-              key="effort-cycle"
-              plain
-              onPress={() => {
-                const index = levels.indexOf(level)
-                const upcoming = levels[(index + 1) % levels.length]
-                if (upcoming !== undefined) void setEffort($, upcoming)
-              }}
-            >
-              <Text dimColor>{level}</Text>
-            </Button>
-          </>
-        )}
+      <Box flexDirection="column">
+        <Box justifyContent="flex-end">
+          <Button key="model-name" plain onPress={() => void openPicker($, options)}>
+            {prefix !== '' && <Text dimColor>{prefix}</Text>}
+            <Text weight="semibold">{fit(name !== '' ? name : 'default', room)}</Text>
+          </Button>
+          {hasLevels && (
+            <>
+              <Text dimColor>{'  ·  '}</Text>
+              <Button
+                key="effort-cycle"
+                plain
+                onPress={() => {
+                  const index = levels.indexOf(level)
+                  const upcoming = levels[(index + 1) % levels.length]
+                  if (upcoming !== undefined) void setEffort($, upcoming)
+                }}
+              >
+                <Text dimColor>{level}</Text>
+              </Button>
+            </>
+          )}
+        </Box>
       </Box>
     )
   })
